@@ -1,0 +1,416 @@
+erDiagram
+
+BANK ||--o{ BRANCH : has
+BANK ||--o{ ACCOUNT : issues
+BANK ||--o{ SAVINGS_CERTIFICATE : issues
+BANK ||--o{ SMS_PARSING_RULE : "formats for"
+BRANCH ||--o{ ACCOUNT : "registered at"
+ACCOUNT |o--o{ CARD : "may issue"
+ACCOUNT ||--o{ TRANSACTION : has
+ACCOUNT ||--o{ INVESTMENT : funds
+ACCOUNT ||--o{ LENT : funds
+ACCOUNT ||--o{ RECURRING_TRANSACTION_TEMPLATE : schedules
+ACCOUNT ||--o{ ATTACHMENT : "may have"
+CARD ||--o{ TRANSACTION : "used in"
+TAX_SPENDING_HEAD ||--o{ CATEGORY : "maps user categories to NBR heads"
+CATEGORY ||--o{ TRANSACTION : classifies
+CATEGORY ||--o{ CATEGORY : "has subcategory"
+CATEGORY ||--o{ RECURRING_TRANSACTION_TEMPLATE : classifies
+RECURRING_TRANSACTION_TEMPLATE ||--o{ TRANSACTION : generates
+TRANSACTION ||--o| TRANSACTION : "transfer pair"
+TRANSACTION }o--o{ TAG : tags
+TRANSACTION ||--o{ ATTACHMENT : "may have"
+INVESTMENT_COMPANY ||--o{ INVESTMENT : receives
+INVESTMENT ||--o{ ATTACHMENT : "may have"
+LENT ||--o{ ATTACHMENT : "may have"
+SAVINGS_CERTIFICATE ||--o{ ATTACHMENT : "may have"
+SMS_PARSING_RULE ||--o{ PARSED_SMS_LOG : matches
+PARSED_SMS_LOG ||--o| TRANSACTION : creates
+TAX_PROFILE ||--o{ TAX_YEAR : "per-FY computation"
+TAX_YEAR ||--o{ TAX_REBATE_PLAN : "rebate planning"
+TAX_REBATE_PLAN ||--o{ TAX_REBATE_CONTRIBUTION : contains
+TAX_REBATE_CONTRIBUTION }o--o| ACCOUNT : "DPS leg"
+TAX_REBATE_CONTRIBUTION }o--o| SAVINGS_CERTIFICATE : "Sanchayapatra leg"
+ACCOUNT ||--o{ STATEMENT : "monthly statement"
+CARD ||--o{ STATEMENT : "credit card statement"
+STATEMENT ||--o{ STATEMENT_LINE : contains
+STATEMENT_LINE ||--o| TRANSACTION : "reconciles"
+TAX_RATE_SET ||--o{ TAX_SLAB : defines
+TAX_RATE_SET ||--o{ TAX_FREE_THRESHOLD : defines
+TAX_RATE_SET ||--o{ SALARY_EXEMPTION_RULE : defines
+TAX_RATE_SET ||--o{ REBATE_RULE : defines
+TAX_RATE_SET ||--o{ ELIGIBLE_INVESTMENT : lists
+TAX_RATE_SET ||--o{ MINIMUM_TAX_RULE : defines
+TAX_RATE_SET ||--o{ FILING_TIMELINE_RULE : defines
+
+%% Attachment.owner_type/owner_id is a polymorphic pointer (Account, Investment, Lent,
+%% Transaction, or Savings Certificate). SQLite/Drift can't enforce that as a real FK,
+%% so the five ATTACHMENT relationships above are conceptual, not literal foreign keys.
+
+BANK {
+    string name
+    string institution_type "Bank, MFS, NBFI"
+    string swift_code
+    string logo
+}
+
+BRANCH {
+    string name
+    string bank FK
+    string routing
+    string address
+    string district
+    string contact_number
+}
+
+ACCOUNT {
+    string identifier_name
+    string account_number
+    string bank FK
+    string branch FK
+    string type "Savings, Current, DPS, FDR, LOAN"
+    string account_holder_name
+    string mobile_number
+    string email
+    string nominee
+    string currency
+    string status "Active, Closed, Matured, Defaulted"
+    date opening_date
+    int balance "Savings, Current and LOAN"
+    int overdraft_limit "Current only"
+    date start_date "FDR and DPS"
+    date maturity_date "FDR and DPS"
+    int tenure_months "FDR and DPS"
+    float interest_rate "FDR and DPS"
+    float govt_vat_on_interest "FDR and DPS"
+    int total_interest "FDR and DPS"
+    int net_interest "FDR and DPS"
+    int total_amount_on_maturity "FDR and DPS"
+    boolean auto_renewal "FDR and DPS"
+    int principal_amount "FDR only"
+    int installment_amount "DPS and LOAN"
+    date installment_date "DPS and LOAN"
+    int total_principal_on_maturity "DPS only"
+    string loan_type "Personal, Auto, Home, Credit Card EMI, Informal, Other"
+    date disbursed_date "LOAN only"
+    date loan_end_date "LOAN only"
+    int loan_principal_amount "LOAN only"
+    float loan_interest_rate "LOAN only"
+    int processing_fee "LOAN only"
+    int duration_months "LOAN only"
+    int total_emi_payable "LOAN only"
+    int total_paid "LOAN only"
+    string repayment_status "Ongoing, Repaid, Defaulted"
+}
+
+CARD {
+    string identifier_name
+    string account FK "0..1, debit only"
+    string type "Debit, Credit"
+    string network "VISA, MASTER CARD, AMEX, TAKAPAY, DINERS CLUB"
+    string card_number
+    string card_holder_name
+    string expire_month
+    string expire_year
+    int balance
+    int credit_limit "Credit only"
+    int billing_cycle_day "Credit only"
+    date payment_due_date "Credit only"
+    int minimum_due "Credit only"
+    int annual_fee "Credit only"
+    string status "Active, Blocked, Expired, Cancelled"
+}
+
+TRANSACTION {
+    string account FK
+    string card FK "optional"
+    string category FK
+    string type "Debit, Credit"
+    int amount
+    string currency
+    int balance_after
+    datetime transaction_date
+    date value_date
+    string description
+    string counterparty_name
+    string counterparty_account
+    string method "Cash, NPSB, BEFTN, RTGS, EFTN, Mobile Banking, Card, Internal Transfer, Cheque, Standing Instruction, Other"
+    string reference_number
+    string status "Pending, Completed, Failed, Reversed"
+    string source "Manual, SMS Parsed, Statement Import, API"
+    string linked_transfer FK "self, paired leg"
+    string statement_line FK "optional"
+    datetime reconciled_at "optional"
+    string recurring_template FK "optional"
+    string attachment FK "optional"
+    string notes
+}
+
+TAX_SPENDING_HEAD {
+    string name "NBR head name"
+    string code "section/schedule reference"
+    string head_type "Income, Allowance, Exemption, Rebate Eligible, Deduction"
+    string description
+    boolean is_system
+}
+
+CATEGORY {
+    string name
+    string parent_category FK "optional"
+    string tax_head FK "optional, NBR head"
+    string type "Income, Expense, Transfer, Investment, Loan, Loan Repayment"
+    string icon
+    string color
+    boolean is_system
+}
+
+TAG {
+    string name
+    string color
+}
+
+SAVINGS_CERTIFICATE {
+    string id
+    string certificate_number
+    string bank FK
+    string name
+    string type
+    string holder_name
+    int balance "face value"
+    date issue_date
+    date schedule_maturity_date
+    int tenure_months
+    float interest_rate
+    float govt_vat_on_interest
+    int expected_maturity_amount
+    date encashment_date
+    boolean tax_rebate_eligible
+    string status "Active, Encashed, Matured"
+}
+
+INVESTMENT {
+    datetime creation_date
+    datetime updation_date
+    date investment_date
+    string funding_account FK
+    string method
+    string order_reference
+    string invested_company FK
+    int principal_amount
+    date expected_return_date
+    date actual_return_date
+    int return_amount
+    int profit
+    string status "Active, Matured, Defaulted"
+}
+
+INVESTMENT_COMPANY {
+    string name
+    string address
+    string contact_info
+    string website
+}
+
+LENT {
+    string direction "Lent Out, Borrowed"
+    string counterparty_name
+    string account FK
+    string method
+    int amount
+    date lent_date
+    date expected_return_date
+    date actual_return_date
+    string status "Outstanding, Partially Returned, Returned, Written Off"
+    string proof_reference
+    string notes
+}
+
+RECURRING_TRANSACTION_TEMPLATE {
+    string account FK
+    string category FK
+    int amount
+    string type "Debit, Credit"
+    string frequency "Weekly, Monthly, Quarterly, Yearly"
+    int day_of_period
+    string description
+    date next_due_date
+    date end_date
+    boolean auto_create
+    boolean active
+}
+
+SMS_PARSING_RULE {
+    string bank FK
+    string sender_id_pattern
+    string regex_pattern
+    string field_mapping
+    string account_type "optional"
+    string sample_sms
+    boolean active
+}
+
+PARSED_SMS_LOG {
+    string raw_sms_text
+    string sender
+    datetime received_at
+    string matched_rule FK
+    string parse_status "Parsed, Unparsed, Failed, Ignored"
+    string created_transaction FK "optional"
+    string notes
+}
+
+ATTACHMENT {
+    string owner_type "Account, Investment, Lent, Transaction, Savings Certificate"
+    string owner_id
+    string name
+    string file_path
+    string mime_type "pdf, png, jpg, jpeg"
+    datetime uploaded_at
+}
+
+TAX_PROFILE {
+    string employment_type "Private Job, Govt Job, Business, Freelancer, Other"
+    string tin_number
+    string tax_circle
+    string tax_zone
+    string employer_name
+    string employer_address
+    string employer_tin
+}
+
+TAX_YEAR {
+    string financial_year "e.g. 2025-2026"
+    string tax_profile FK
+    int gross_salary_income
+    int interest_income "from DPS, FDR, SavingsCert"
+    int other_income
+    int total_taxable_income "computed"
+    int exempted_income "computed"
+    int vat_on_interest "computed"
+    int tax_paid_by_employer "TPS"
+    int advance_tax_paid
+    int tax_before_rebate "computed from active TaxSlabs"
+    int total_rebate_claimed "from TaxRebatePlan"
+    int max_possible_rebate "computed per RebateRule"
+    int investment_required_for_max_rebate "computed"
+    int net_tax_payable "computed"
+    string status "Draft, Computed, Filed"
+    string notes
+}
+
+TAX_REBATE_PLAN {
+    string tax_year FK
+    string financial_year "e.g. 2025-2026"
+    int max_eligible_amount "govt ceiling"
+    int target_investment "user plan"
+    string notes
+    boolean is_active
+}
+
+TAX_REBATE_CONTRIBUTION {
+    string plan FK
+    string dps_account FK "optional, DPS only"
+    string savings_certificate FK "optional"
+    int monthly_installment "for DPS"
+    date start_date
+    date end_date
+    int total_investment "computed"
+    string notes
+}
+
+STATEMENT {
+    string account FK "optional"
+    string card FK "optional"
+    int month "1-12"
+    int year
+    string file_path
+    string file_name
+    int file_size "bytes"
+    string file_hash "SHA-256"
+    datetime uploaded_at
+    string status "Uploaded, Parsing, Parsed, Reconciling, Reconciled, Has Issues"
+    string notes
+}
+
+STATEMENT_LINE {
+    string statement FK
+    int line_number
+    date transaction_date
+    date value_date "optional"
+    string description
+    int amount
+    int balance_after "optional"
+    string counterparty_name "optional"
+    string reference_number "optional"
+    string match_status "Unmatched, Matched, New Transaction, Suspicious"
+    string transaction FK "optional"
+    float confidence "optional, 0.0-1.0"
+    datetime matched_at "optional"
+    string matched_by "Auto, Manual"
+    string superseded_by FK "optional, self"
+}
+
+TAX_RATE_SET {
+    string financial_year "e.g. 2026-2027"
+    string label "e.g. Finance Act 2026"
+    boolean is_active "only one at a time"
+    string notes
+}
+
+TAX_SLAB {
+    string rate_set FK
+    int slab_order
+    int min_income
+    int max_income "nullable, null = rest"
+    float rate_percent "e.g. 10.0"
+}
+
+TAX_FREE_THRESHOLD {
+    string rate_set FK
+    string category_code "General, Woman Senior, Third Gender Disabled, Freedom Fighter Juli, Parent of Disabled"
+    string category_label
+    int exempt_amount
+}
+
+SALARY_EXEMPTION_RULE {
+    string rate_set FK
+    int max_exempt_amount "e.g. 500000"
+    float percent_of_salary "e.g. 33.33"
+    string description
+}
+
+REBATE_RULE {
+    string rate_set FK
+    string label "e.g. Section 78"
+    float rate_percent_of_A "e.g. 3.0"
+    float rate_percent_of_B "e.g. 10.0"
+    int max_rebate_amount "e.g. 750000"
+}
+
+ELIGIBLE_INVESTMENT {
+    string rate_set FK
+    string instrument_code "DPS, Sanchayapatra, Life Insurance, PF, GPS, Pension, Govt Securities, Mutual Fund, Listed Shares, ICB Unit, Charitable Donation"
+    string instrument_name
+    int max_annual_limit "nullable, per-instrument cap"
+    boolean is_active
+    string description "optional"
+}
+
+MINIMUM_TAX_RULE {
+    string rate_set FK
+    string location_code "Major City, Other City, Other Area, New Taxpayer"
+    string location_label
+    int min_tax_amount "e.g. 5000"
+}
+
+FILING_TIMELINE_RULE {
+    string rate_set FK
+    int quarter_number "1-4"
+    string quarter_label "e.g. Jul-Sep (Q1)"
+    int start_month
+    int end_month
+    float rebate_percent "nullable, e.g. 5.0"
+    int rebate_max_amount "nullable, e.g. 25000"
+    float penalty_percent "nullable, e.g. 2.0"
+    int penalty_max_amount "nullable, e.g. 3000"
+}

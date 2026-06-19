@@ -1,0 +1,588 @@
+Primary Entities:
+
+Bank:
+* Name
+* Type
+   * Bank
+   * MFS
+   * NBFI
+* SWIFT Code
+* Logo
+[1 to many relationship with Branch]
+
+
+Branch:
+* Name
+* Bank [FK ― Bank]
+* Routing
+* Address
+* District
+* Contact Number [optional]
+
+
+Accounts: [ 1 to many relationship with Cards ] 1…*
+* Identifier Name
+* Account Number
+* Bank [FK ― Bank]
+* Branch [FK ― Branch]
+* Type
+   * Savings
+   * Current
+   * DPS
+   * FDR
+   * LOAN
+* Name of the Account Holder
+* Mobile Number
+* Email
+* Nominee
+* Currency
+* Status
+   * Active
+   * Closed
+   * Matured
+   * Defaulted
+* Opening Date
+For Savings, Current & LOAN:
+* Balance
+For Current:
+* Overdraft Limit
+For FDR and DPS:
+* Start Date
+* Maturity Date
+* Tenure (months)
+* Interest Rate
+* Government VAT on Interest
+* Total Interest
+* Net Interest
+* Total Amount on Maturity
+* Auto Renewal
+For FDR:
+* Principal Amount
+For DPS & LOAN:
+* Installment Amount
+* Installment Date
+For DPS:
+* Total Principal On Maturity
+For LOAN:
+* Loan Type
+   * Personal
+   * Auto
+   * Home
+   * Credit Card EMI
+   * Informal
+   * Other
+* Disbursed Date
+* Start Date
+* End Date
+* Principal Amount
+* Interest Rate
+* Processing Fee
+* Duration (months)
+* Total EMI Payable
+* Total Paid
+* Repayment Status
+   * Ongoing
+   * Repaid
+   * Defaulted
+
+
+Cards: [ 0 to 1 relationship with Accounts ] 0…1
+** Only debit card is associated with a current or savings account and have the same balance as account
+* Identifier Name
+* Type
+   * Debit
+   * Prepaid
+   * Credit
+* Network
+   * VISA
+   * MASTER CARD
+   * AMEX
+   * TAKAPAY
+   * DINERS CLUB
+* Card Number
+* Card Holder Name
+* Expire
+   * Month (two digits: string[as can have zero at the front])
+   * Year (two digits: string[as can have zero at the front])
+* Balance
+For Credit:
+* Credit Limit
+* Billing Cycle Day
+* Payment Due Date
+* Minimum Due
+* Annual Fee
+* Status
+   * Active
+   * Blocked
+   * Expired
+   * Cancelled
+
+
+Transactions: [ many to 1 relationship with Accounts ] *…1
+* Account
+* Card [optional]
+* Category
+* Type
+   * Debit
+   * Credit
+* Amount
+* Currency
+* Balance After
+* Transaction Date
+* Value Date
+* Description
+* Counterparty Name
+* Counterparty Account
+* Method
+   * Cash
+   * NPSB
+   * BEFTN
+   * RTGS
+   * EFTN
+   * Mobile Banking
+   * Card
+   * Internal Transfer
+   * Cheque
+   * Standing Instruction
+   * Other
+* Reference Number
+* Status
+   * Pending
+   * Completed
+   * Failed
+   * Reversed
+* Source
+   * Manual
+   * SMS Parsed
+   * Statement Import
+   * API
+* Linked Transfer [the paired transaction, if this is one leg of a transfer between own accounts]
+* Statement Line [FK ― the reconciled statement row; set when statement overrides this transaction]
+* Reconciled At [when this transaction was last reconciled against a bank statement]
+* Recurring Template [optional]
+* Attachment [optional]
+* Notes
+
+
+Statement: [one per uploaded PDF, account/card + month/year]
+* Account [FK, optional] — set for account statements (Savings/Current/DPS/FDR/LOAN)
+* Card [FK, optional] — set for credit card statements
+* Month [1–12]
+* Year
+* File Path [local path to stored PDF]
+* File Name [original filename]
+* File Size [bytes]
+* File Hash [SHA‑256 — dedup, tamper detection]
+* Uploaded At
+* Status [Uploaded, Parsing, Parsed, Reconciling, Reconciled, Has Issues]
+* Notes
+
+At least one of Account or Card must be set. Re-uploading replaces the prior statement for
+that (account|card) + month + year.
+
+
+Statement Line: [one per parsed row in a statement]
+* Statement [FK]
+* Line Number [ordinal within the statement]
+* Transaction Date
+* Value Date [optional]
+* Description
+* Amount [positive; direction from debit/credit column]
+* Balance After [optional, running balance per statement]
+* Counterparty Name [optional]
+* Reference Number [optional]
+* Match Status [Unmatched, Matched, New Transaction, Suspicious]
+   * Unmatched — no matching Transaction found → will create one
+   * Matched — linked to an existing Transaction, values reconciled
+   * New Transaction — Transaction was created from this line
+   * Suspicious — low confidence or conflicting values → user review
+* Transaction [FK, optional — set when matched or created]
+* Confidence [0.0–1.0, optional — auto-match score]
+* Matched At [optional]
+* Matched By [Auto, Manual]
+* Superseded By [FK → Statement Line self, optional — set when a re-upload replaces this line]
+
+
+Categories: [ self-referencing, 1 to many, for subcategories ]
+* Name
+* Parent Category [optional]
+* Tax Head [FK ― Tax Spending Head, optional]
+* Type [determines how the app treats this for tax & net worth]
+   * Income       — earned money (salary, interest, rent, business, capital gains)
+   * Expense      — consumption spending (maps to IT-10BB expenditure heads)
+   * Transfer     — moving between own accounts or cash ↔ bank (no tax impact)
+   * Investment   — acquiring financial assets (DPS, FDR, shares, Sanchayapatra, CFD, insurance)
+   * Loan         — receiving loan disbursement (liability, not income)
+   * Loan Repayment — repaying loan principal (reduces liability, not expense)
+* Icon
+ * Color
+ * Is System [default false — seed categories vs ones you add]
+
+Seeded income categories:
+- Monthly Salary          → INCOME     → Tax Head: Income from Employment (Sch-1)
+- Festival Bonus          → INCOME     → Tax Head: Festival Bonus (6th Sch A Para 4)
+- House Rent Received     → INCOME     → Tax Head: Income from Rent (Sch-2)
+- Business / Freelance    → INCOME     → Tax Head: Income from Business (Sch-4)
+- Bank Interest           → INCOME     → Tax Head: Income from Financial Assets
+- Dividend                → INCOME     → Tax Head: Income from Financial Assets
+- Savings Cert. Interest  → INCOME     → Tax Head: Income from Financial Assets
+- Capital Gain            → INCOME     → Tax Head: Income from Capital Gain
+- Other Income            → INCOME     → Tax Head: Income from Other Sources
+
+Seeded expense categories (all map to IT-10BB):
+- Groceries & Food        → EXPENSE    → Tax Head: Personal & Family Fooding…
+- Household Supplies      → EXPENSE    → Tax Head: Personal & Family Fooding…
+- House Rent Paid         → EXPENSE    → Tax Head: Housing Expense
+- Home Maintenance        → EXPENSE    → Tax Head: Housing Expense
+- Fuel / Petrol           → EXPENSE    → Tax Head: Personal Transport Expense
+- Car Maintenance         → EXPENSE    → Tax Head: Personal Transport Expense
+- Public Transport        → EXPENSE    → Tax Head: Personal Transport Expense
+- Electricity Bill        → EXPENSE    → Tax Head: Utility Expense
+- Gas Bill                → EXPENSE    → Tax Head: Utility Expense
+- Water Bill              → EXPENSE    → Tax Head: Utility Expense
+- Mobile / Internet       → EXPENSE    → Tax Head: Utility Expense
+- Tuition / School Fees   → EXPENSE    → Tax Head: Education Expense
+- Coaching / Course Fees  → EXPENSE    → Tax Head: Education Expense
+- Domestic Travel         → EXPENSE    → Tax Head: Travel & Vacation
+- Foreign Travel          → EXPENSE    → Tax Head: Travel & Vacation
+- Eid / Festival          → EXPENSE    → Tax Head: Festival & Other Special Expense
+- Wedding / Event         → EXPENSE    → Tax Head: Festival & Other Special Expense
+- Tax Paid                → EXPENSE    → Tax Head: TDS & Tax/Surcharge Paid
+- Loan Interest Paid      → EXPENSE    → Tax Head: Interest Paid on Personal Loan
+
+Seeded transfer categories:
+- Internal Transfer       → TRANSFER   → Tax Head: (none)
+- Cash Deposit            → TRANSFER   → Tax Head: (none)
+- ATM Withdrawal          → TRANSFER   → Tax Head: (none)
+
+Seeded investment categories (linked to Section 44 rebate heads where applicable):
+- DPS Contribution        → INVESTMENT → Tax Head: DPS Contribution
+- Life Insurance Premium  → INVESTMENT → Tax Head: Life Insurance Premium
+- Sanchayapatra Purchase  → INVESTMENT → Tax Head: Sanchayapatra Investment
+- PF / CPF Contribution   → INVESTMENT → Tax Head: Provident Fund (employee)
+- Share / MF Purchase     → INVESTMENT → Tax Head: Shares / Debentures / Mutual Funds
+- CFD Deposit             → INVESTMENT → Tax Head: CFD
+- Cash Donation           → INVESTMENT → Tax Head: Donation (cash)
+- Zakat Payment           → INVESTMENT → Tax Head: Donation (Zakat)
+- Universal Pension       → INVESTMENT → Tax Head: Universal Pension Scheme
+- FDR Placement           → INVESTMENT → Tax Head: (none — not rebate-eligible)
+- Gold / Asset Purchase   → INVESTMENT → Tax Head: (none)
+
+Seeded loan categories:
+- Home Loan Received      → LOAN           → Tax Head: (none)
+- Personal Loan Received  → LOAN           → Tax Head: (none)
+- Auto Loan Received      → LOAN           → Tax Head: (none)
+- Overdraft Taken         → LOAN           → Tax Head: (none)
+
+Seeded loan repayment categories:
+- Home Loan Principal     → LOAN_REPAYMENT → Tax Head: (none)
+- Personal Loan Principal → LOAN_REPAYMENT → Tax Head: (none)
+- Auto Loan Principal     → LOAN_REPAYMENT → Tax Head: (none)
+- Overdraft Repayment     → LOAN_REPAYMENT → Tax Head: (none)
+
+(When paying an EMI the user splits it: interest portion → EXPENSE / Loan Interest Paid;
+principal portion → LOAN_REPAYMENT / corresponding loan principal. The app can suggest
+this split from the loan's amortisation schedule stored in LoanDetail.)
+
+The user adds their own subcategories under these. Each user Category maps to exactly one
+Tax Spending Head via Tax Head [FK], so the app can aggregate for the e-Return form.
+
+
+Tax Spending Head: [seeded by app, matching NBR e-Return form]
+* Name [exact label from IT-10BB / income schedule, e.g. "Housing Expense", "Income from Employment"]
+* Code [form reference, e.g. "IT-10BB:2", "Sch-1", "Section 44(1)(a)"]
+* Head Type
+   * Income
+   * Allowance
+   * Exemption
+   * Rebate Eligible
+   * Deduction
+* Description [optional — explains the rule, limit, or exclusion]
+* Is System [default true — seeded by the app, not user-created]
+
+Expenditure heads — IT-10BB (ser 1–9, head_type = DEDUCTION):
+1. Personal & Family Fooding, Clothing & Other Essentials
+2. Housing Expense
+3. Personal Transport Expense
+4. Utility Expense (Electricity, Gas, Water, Telephone, Mobile, Internet)
+5. Education Expense
+6. Personal Expense for Local & Foreign Travel, Vacation etc.
+7. Festival & Other Special Expense
+8. Tax Deducted/Collected at Source & Tax/Surcharge Paid on Last Year Return
+9. Interest Paid on Personal Loan (Institution & Other Source)
+
+Income heads (head_type = INCOME):
+- Income from Employment (Sch-1)        ← covers monthly salary, dearness, house rent
+                                           allowance, medical allowance, conveyance
+- Festival Bonus (6th Sch A Para 4)     ← separate because it's exempt, not taxable
+- Income from Rent (Sch-2)
+- Income from Agriculture (Sch-3)
+- Income from Business (Sch-4)
+- Income from Capital Gain
+- Income from Financial Assets          ← bank interest, dividend, securities profit
+- Income from Other Sources             ← royalty, honorarium, govt incentive
+- Share of Income from Firm / AoP
+- Income of Minor / Spouse (non-taxpayer)
+- Taxable Income from Abroad
+
+Allowance / Exemption heads (head_type = ALLOWANCE / EXEMPTION):
+House Rent Allowance, Medical Allowance, Conveyance Allowance, Leave Encashment,
+Provident Fund (employer), Gratuity, Pension, Education Assistance, Lunch Subsidy,
+Telephone / Internet, Laptop / Vehicle (official use).
+
+Rebate heads — Section 44 (head_type = REBATE_ELIGIBLE):
+DPS Contribution, Life Insurance Premium, Sanchayapatra Investment,
+Provident Fund (employee), Superannuation Fund, Shares / Debentures / Mutual Funds,
+CFD, Donation (cash), Donation (Zakat), Universal Pension Scheme, Group Insurance Premium.
+
+
+Tags: [ many to many relationship with Transactions ]
+* Name
+* Color
+
+
+Savings Certificate
+* ID
+* Certificate Number
+* Bank [FK ― Bank]
+* Name
+* Type
+* Holder Name
+* Balance (Face Value)
+* Issue Date
+* Schedule Date of Maturity
+* Tenure (months)
+* Interest Rate
+* Government VAT on Interest
+* Expected Maturity Amount
+* Encashment Date
+* Tax Rebate Eligible
+* Status
+   * Active
+   * Encashed
+   * Matured
+
+
+Investment
+* Creation Date
+* Updation Date
+* Investment Date
+* Funding Account [FK ― Account]
+* Method
+* Order Reference
+* Invested Company [FK ― Investment Company]
+* Principal Amount
+* Expected Return Date
+* Actual Return Date
+* Return Amount
+* Profit
+* Status
+   * Active
+   * Matured
+   * Defaulted
+* Associated Documents [Multiple]
+   * Name
+   * Attachment [pdf, png, jpg, jpeg]
+
+
+Investment Company
+* Name
+* Address
+* Contact info
+* Website
+
+
+Lent
+* Direction
+   * Lent Out
+   * Borrowed
+* Counterparty Name
+* Account [the account money left from / returned to]
+* Method
+* Amount
+* Lent Date
+* Expected Return Date
+* Actual Return Date
+* Status
+   * Outstanding
+   * Partially Returned
+   * Returned
+   * Written Off
+* Proof Reference
+* Notes
+
+
+Recurring Transaction Template
+* Account
+* Category
+* Amount
+* Type
+   * Debit
+   * Credit
+* Frequency
+   * Weekly
+   * Monthly
+   * Quarterly
+   * Yearly
+* Day of Period
+* Description
+* Next Due Date
+* End Date
+* Auto Create
+* Active
+
+
+SMS Parsing Rule
+* Bank [FK ― Bank]
+* Sender ID Pattern
+* Regex Pattern
+* Field Mapping
+* Account Type [optional, scopes rule to one account type]
+* Sample SMS
+* Active
+
+
+Parsed SMS Log
+* Raw SMS Text
+* Sender
+* Received At
+* Matched Rule
+* Parse Status
+   * Parsed
+   * Unparsed
+   * Failed
+   * Ignored
+* Created Transaction [optional]
+* Notes
+
+
+Tax Profile:
+* Employment Type
+   * Private Job
+   * Govt Job
+   * Business
+   * Freelancer
+   * Other
+* TIN Number [optional]
+* Tax Circle [optional]
+* Tax Zone [optional]
+* Employer Name [optional]
+* Employer Address [optional]
+* Employer TIN [optional]
+
+
+Tax Year:
+* Financial Year [e.g. "2025-2026"]
+* Tax Profile [FK ― Tax Profile]
+* Gross Salary Income [from employment]
+* Interest Income [aggregated from DPS, FDR, Savings Certificates]
+* Other Income [rental, freelance, etc.]
+* Total Taxable Income [computed]
+* Exempted Income [computed: total income − taxable income; driven by Salary Exemption Rule]
+* VAT on Interest [computed: sum of VAT from DPS, FDR, Savings Certificates]
+* Tax Paid by Employer [TPS deducted at source]
+* Advance Tax Paid
+* Tax Before Rebate [computed: tax on total taxable income applied against active Tax Slabs]
+* Total Rebate Claimed [from Tax Rebate Plan]
+* Max Possible Rebate [computed: lowest of 3% of A, rebate_pct_B% of B, or max_rebate_cap]
+* Investment Required for Max Rebate [computed: max_possible_rebate ÷ (rebate_pct_B / 100)]
+* Net Tax Payable [computed: tax_before_rebate − total_rebate_claimed − tax_paid]
+* Status
+   * Draft
+   * Computed
+   * Filed
+* Notes
+
+
+Tax Rate Set: [master config per financial year — admin activates one per FY]
+* Financial Year [e.g. "2026-2027"]
+* Label [e.g. "Finance Act 2026"]
+* Is Active [only one at a time]
+* Notes
+
+Tax Slab: [progressive brackets within a rate set]
+* Rate Set [FK ― Tax Rate Set]
+* Order [evaluated ascending]
+* Min Income [inclusive lower bound]
+* Max Income [nullable — null = rest of income]
+* Rate Percent [e.g. 10.0 for 10%]
+
+Tax Free Threshold: [tax-free limit by taxpayer category]
+* Rate Set [FK ― Tax Rate Set]
+* Category Code [General, Woman Senior, Third Gender Disabled, Freedom Fighter Juli, Parent of Disabled]
+* Category Label [human-readable]
+* Exempt Amount [income exempt from tax]
+
+Salary Exemption Rule: [standard deduction on employment income]
+* Rate Set [FK ― Tax Rate Set]
+* Max Exempt Amount [e.g. 500000 BDT]
+* Percent of Salary [e.g. 33.33 for ⅓]
+* Description [e.g. "Lower of 500000 or ⅓ of gross salary"]
+
+Rebate Rule: [Section 78 parameters]
+* Rate Set [FK ― Tax Rate Set]
+* Label [e.g. "Section 78 — Finance Act 2026"]
+* Rate Percent of A [rebate as % of taxable income, e.g. 3.0]
+* Rate Percent of B [rebate as % of eligible investment, e.g. 10.0]
+* Max Rebate Amount [absolute cap, e.g. 750000]
+
+Rebate = lowest of: (A × rate_percent_of_A / 100), (B × rate_percent_of_B / 100), max_rebate_amount.
+
+Eligible Investment: [instrument approved for tax rebate]
+* Rate Set [FK ― Tax Rate Set]
+* Instrument Code [DPS, Sanchayapatra, Life Insurance, PF, GPS, Pension, Govt Securities, etc.]
+* Instrument Name [user-facing label]
+* Max Annual Limit [nullable, per-instrument cap e.g. DPS 120000, Govt Securities 500000]
+* Is Active
+* Description [optional]
+
+Minimum Tax Rule: [minimum tax by location]
+* Rate Set [FK ― Tax Rate Set]
+* Location Code [Major City, Other City, Other Area, New Taxpayer]
+* Location Label [e.g. "Dhaka & Chattogram city corporation"]
+* Min Tax Amount [e.g. 5000]
+
+Filing Timeline Rule: [incentive/penalty per quarter for early/late filing]
+* Rate Set [FK ― Tax Rate Set]
+* Quarter Number [1–4]
+* Quarter Label [e.g. "Jul–Sep (Q1)"]
+* Start Month [7, 10, 1, 4]
+* End Month [9, 12, 3, 6]
+* Rebate Percent [nullable — e.g. 5.0 for Q1 early filing rebate]
+* Rebate Max Amount [nullable — cap on filing rebate]
+* Penalty Percent [nullable — e.g. 2.0 for Q3 late filing]
+* Penalty Max Amount [nullable — cap on penalty]
+
+Q1 (Jul–Sep): 5% rebate up to 25000; Q2 (Oct–Dec): neutral; Q3 (Jan–Mar): 2% penalty up to 3000; Q4 (Apr–Jun): 5% penalty up to 5000.
+
+Tax Rebate Plan:
+* Tax Year [FK ― Tax Year]
+* Max Eligible Amount [government-defined ceiling for that FY]
+* Target Investment [user's planned total]
+* Notes
+* Active
+
+Tax Rebate Contribution:
+* Plan [FK ― Tax Rebate Plan]
+* DPS Account [FK ― Account, optional]
+* Savings Certificate [FK ― Savings Certificate, optional]
+* Monthly Installment [for DPS]
+* Start Date
+* End Date
+* Total Investment [computed: monthly installment × months, or certificate face value]
+* Notes
+
+
+Attachment
+* Owner Type
+   * Account
+   * Investment
+   * Loan
+   * Lent
+   * Transaction
+   * Savings Certificate
+* Owner ID
+* Name
+* File Path
+* Mime Type [pdf, png, jpg, jpeg]
+* Uploaded At
