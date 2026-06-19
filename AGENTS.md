@@ -2,10 +2,25 @@
 
 ## Project
 
-**Personal Financial Atlas** — a Bangladesh-focused personal finance app replacing a manual Excel
-system with a Flutter mobile app that tracks bank accounts, cards, transactions (mostly captured
-via SMS parsing), DPS/FDR/savings certificates, investments, informal lending, and auto-computes
-tax using data-driven NBR e-Return categories.
+**Personal Financial Atlas** — a Bangladesh-focused **total personal financial management app**
+replacing a manual Excel system with a Flutter mobile app that serves as a single pane of glass
+for the user's entire financial life. It tracks bank accounts, cards, transactions (mostly
+captured via SMS parsing), DPS/FDR/savings certificates, investments, informal lending, loan
+amortisation, and net worth. It auto-computes tax using data-driven NBR e-Return categories,
+generates the wealth statement, and produces a ready-to-file return by July 1 each year.
+
+The app is a **full financial dashboard**, not just a tax calculator:
+- **Balance checking** — one-tap view of all account balances (savings, current, DPS, FDR, loan
+  outstanding) across all banks and MFS providers
+- **Total deposits & investments** — aggregate view of DPS, FDR, Sanchayapatra, shares, CFD, and
+  other investments with accrued interest/profit
+- **Net worth tracking** — assets minus liabilities, updated with every transaction
+- **Cash flow analysis** — monthly income vs expense breakdown by category, spending trends
+- **Loan & EMI tracking** — outstanding principal, amortisation schedule, remaining tenure
+- **Informal lending** — money lent to/borrowed from people, tracked separately from bank loans
+- **Tax year planner** — start-of-year estimate, monthly investment suggestions, refined by
+  actual SMS/statement data throughout the year, ready by July 1
+- **Admin panel** — year-scoped tax parameter config, no code changes when NBR updates rates
 
 ## Design principle
 
@@ -25,6 +40,7 @@ eventually side-load or distribute outside the Play Store entirely.
   without app updates.
 - Backup = encrypted export file, user-chosen destination (USB, NAS, cloud of their choice)
 - [Other deps / state management / package name — fill in]
+- [Architecture pattern / module division — to be decided next]
 
 ## Platform requirements
 
@@ -39,6 +55,24 @@ Schema is **frozen at v2**. Implementation has not started.
 The **one authoritative schema** is `docs/database/Schema/Personal_Finance_App_Schema.md` (v2).
 Read it before any coding. The `.txt` and `.mermaid` files are derived — the `.md` wins.
 Do not change the schema without updating all three files and this file simultaneously.
+
+## Architecture & module design (next step)
+
+Before writing any code, the application must be divided into well-defined modules with
+strict separation of concerns. The following must be decided and documented here:
+
+- **Architecture pattern**: e.g. clean architecture (data/domain/presentation layers),
+  feature-based modularisation, or a hybrid
+- **State management**: Riverpod, Bloc, or other
+- **Module breakdown**: how features map to modules, shared core module, shared data module
+- **Dependency inversion**: data sources (Drift DAOs) behind repository interfaces, domain
+  models separated from DTOs
+- **Directory structure**: convention for lib/ layout (e.g.
+  `lib/core/`, `lib/features/<name>/`, `lib/data/`, `lib/domain/`)
+- **Navigation / routing**: GoRouter or similar, with module-scoped routes
+
+This module design will be recorded in a new `ARCHITECTURE.md` file and the agreed structure
+will be reflected back into this section.
 
 ## Domain context
 
