@@ -7,6 +7,14 @@ system with a Flutter mobile app that tracks bank accounts, cards, transactions 
 via SMS parsing), DPS/FDR/savings certificates, investments, informal lending, and auto-computes
 tax using data-driven NBR e-Return categories.
 
+## Design principle
+
+**Zero third-party dependency for your data.** This is a personal financial vault, not a SaaS
+product. You own the file, you choose where to back it up, and the app works fully offline.
+No Firebase, no cloud sync, no telemetry. Google Play is only a distribution channel — the app
+does not rely on Google Play Services for any core function. The architecture assumes you may
+eventually side-load or distribute outside the Play Store entirely.
+
 ## Stack
 
 - Flutter (mobile, Android-first) — *or React Native, undecided*
@@ -15,20 +23,22 @@ tax using data-driven NBR e-Return categories.
 - Admin panel required — tax parameters (slabs, rates, rebate %, instrument caps, minimum tax,
   filing incentives) are data-driven, not hardcoded. Admin activates one `TaxRateSet` per FY
   without app updates.
+- Backup = encrypted export file, user-chosen destination (USB, NAS, cloud of their choice)
 - [Other deps / state management / package name — fill in]
 
 ## Platform requirements
 
-- The app must be publishable to Google Play Store — all dependencies, permissions, and
-  configurations must comply with Google Play policies (privacy policy, data handling,
-  permissions rationale, target API level, etc.). Features or library choices that could
-  jeopardize Play Store acceptance must be flagged.
+- Distribution through Google Play Store is the target for convenience, but the app must function
+  identically when side-loaded or distributed from elsewhere. No hard dependency on Play Services.
+- All sensitive data (transactions, account numbers, card data) encrypted at rest via sqlcipher.
+- Features or library choices that could jeopardize Play Store acceptance must be flagged.
 
 ## Status
 
-Schema is being refined during inception phase; implementation has not started.
-The authoritative field-level schema lives in `docs/database/Schema/Personal_Finance_App_Schema.md`. Read that file before touching anything
-data-model related; don't re-derive entities from scratch in this file or from guesswork.
+Schema is **frozen at v2**. Implementation has not started.
+The **one authoritative schema** is `docs/database/Schema/Personal_Finance_App_Schema.md` (v2).
+Read it before any coding. The `.txt` and `.mermaid` files are derived — the `.md` wins.
+Do not change the schema without updating all three files and this file simultaneously.
 
 ## Domain context
 
@@ -41,11 +51,12 @@ data-model related; don't re-derive entities from scratch in this file or from g
 - Most transactions will originate from parsed bank SMS alerts, not manual entry. SMS format
   varies per bank and changes without notice — the parsing layer needs to degrade gracefully
   (log + flag for manual review) rather than silently drop unmatched messages.
-- Tax computation is entirely data-driven. Eight config entities under `TaxRateSet` (slabs,
-  thresholds, exemption rule, rebate rule, investment caps, minimum tax, filing timeline)
-  live in the database. Admin activates one `TaxRateSet` per FY. The app computes tax,
-  exemptions, rebates, and investment suggestions by reading the active config — no code
-  changes needed when NBR updates rates.
+- Tax computation is entirely data-driven. Nine config entities under `TaxRateSet` (slabs,
+  thresholds, exemption rule, rebate rule, investment caps, surcharge, minimum tax, filing
+  timeline, plus the per-FY seeded TaxSpendingHeads and Categories) live in the database.
+  Admin activates one `TaxRateSet` per FY. The app computes tax (Section 78 A, slabs, minimum
+  tax, surcharge, rebate, clawback, filing incentive/penalty) by reading the active config —
+  no code changes needed when NBR updates rates.
 - Bank statement PDF uploads reconciled against SMS-parsed transactions. The statement is the
   authoritative source: statement values override SMS values. Unmatched statement lines create
   new transactions; unmatched SMS transactions are flagged for review.
@@ -65,6 +76,12 @@ data-model related; don't re-derive entities from scratch in this file or from g
   `Investment`, `Lent`, `Transaction`, and `SavingsCertificate`. SQLite can't enforce that as a
   real foreign key — it's an app-layer constraint, so don't "fix" it into five separate tables
   without discussing it first.
+- `Nominee` is polymorphic (`owner_type` + `owner_id`) shared by `Account` and
+  `SavingsCertificate`. Same app-layer FK constraint as Attachment.
+- `EmiAmortizationSchedule` drives the auto-split of each EMI into interest (→ EXPENSE) and
+  principal (→ LOAN_REPAYMENT). The user never manually splits.
+- `TaxRebateContribution` links to `TaxYear` directly (not through `TaxRebatePlan`), enabling
+  cross-year rebate clawback queries when an investment is broken early.
 
 ## Open decisions — ask, don't assume
 
@@ -76,12 +93,13 @@ data-model related; don't re-derive entities from scratch in this file or from g
 
 ## Rough phasing
 
-1. Ledger core — `Bank`, `Account`, `Category`, `Transaction`, `Card`, manual entry only
-2. Richer tracking — `SavingsCertificate`, `Investment`, `Lent`, `Nominee`, `Attachment`
-3. SMS automation — `SmsParsingRule`, `ParsedSmsLog`, auto-creating transactions from SMS
-4. Statement reconciliation — `Statement`, `StatementLine`, PDF parsing + matching UI
-5. Tax admin + planner — `TaxRateSet` + 7 child config entities, admin panel, planning UI
-6. Automation layer — `RecurringTransactionTemplate`, budgeting/insight views
+Phase | Entities | Depends On
+1 — Ledger Core | Bank, Branch, Account, AccountTermDetail, LoanDetail, Category, Transaction, Card, Nominee, EmiAmortizationSchedule | —
+2 — Richer Tracking | SavingsCertificate, InvestmentCompany, Investment, Lent, Attachment, TaxProfile | Phase 1
+3 — SMS Automation | SmsParsingRule, ParsedSmsLog | Phase 1
+4 — Statement Recon | Statement, StatementLine, PDF parse engine | Phase 1, 3
+5 — Tax Engine | TaxRateSet + 8 child configs, TaxYear, TaxYearIncomeSource, TaxYearComputationDetail, TpsDeduction, RebateClawbackEvent, TaxRebatePlan, TaxRebateContribution, WealthCategory, WealthAsset, SurchargeRule, computation engine | Phase 1, 2
+6 — Automation Layer | RecurringTransactionTemplate, Tag, TransactionTag, budget/insight views | Phase 1
 
 ## Working agreement
 

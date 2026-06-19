@@ -5,322 +5,383 @@ BANK ||--o{ ACCOUNT : issues
 BANK ||--o{ SAVINGS_CERTIFICATE : issues
 BANK ||--o{ SMS_PARSING_RULE : "formats for"
 BRANCH ||--o{ ACCOUNT : "registered at"
+
 ACCOUNT |o--o{ CARD : "may issue"
 ACCOUNT ||--o{ TRANSACTION : has
 ACCOUNT ||--o{ INVESTMENT : funds
 ACCOUNT ||--o{ LENT : funds
 ACCOUNT ||--o{ RECURRING_TRANSACTION_TEMPLATE : schedules
-ACCOUNT ||--o{ ATTACHMENT : "may have"
+ACCOUNT ||--o{ STATEMENT : "monthly statement"
+ACCOUNT ||--o{ TAX_REBATE_CONTRIBUTION : "DPS leg"
+ACCOUNT ||--o{ ACCOUNT_TERM_DETAIL : "FDR/DPS detail"
+ACCOUNT ||--o{ LOAN_DETAIL : "LOAN detail"
+
+LOAN_DETAIL ||--o{ EMI_AMORTIZATION_SCHEDULE : amortizes
+
 CARD ||--o{ TRANSACTION : "used in"
-TAX_SPENDING_HEAD ||--o{ CATEGORY : "maps user categories to NBR heads"
+CARD ||--o{ STATEMENT : "credit card statement"
+
+TAX_SPENDING_HEAD ||--o{ CATEGORY : "maps categories to NBR heads"
+TAX_SPENDING_HEAD ||--o{ TAX_YEAR_INCOME_SOURCE : "income schedule breakdown"
+
 CATEGORY ||--o{ TRANSACTION : classifies
-CATEGORY ||--o{ CATEGORY : "has subcategory"
+CATEGURE ||--o{ CATEGORY : "has subcategory"
 CATEGORY ||--o{ RECURRING_TRANSACTION_TEMPLATE : classifies
+
 RECURRING_TRANSACTION_TEMPLATE ||--o{ TRANSACTION : generates
 TRANSACTION ||--o| TRANSACTION : "transfer pair"
-TRANSACTION }o--o{ TAG : tags
-TRANSACTION ||--o{ ATTACHMENT : "may have"
+TRANSACTION }o--o{ TAG : "via TransactionTag"
+
 INVESTMENT_COMPANY ||--o{ INVESTMENT : receives
-INVESTMENT ||--o{ ATTACHMENT : "may have"
-LENT ||--o{ ATTACHMENT : "may have"
-SAVINGS_CERTIFICATE ||--o{ ATTACHMENT : "may have"
-SMS_PARSING_RULE ||--o{ PARSED_SMS_LOG : matches
-PARSED_SMS_LOG ||--o| TRANSACTION : creates
+
 TAX_PROFILE ||--o{ TAX_YEAR : "per-FY computation"
+
+TAX_YEAR ||--o{ TAX_YEAR_INCOME_SOURCE : "income by schedule"
+TAX_YEAR ||--o| TAX_YEAR_COMPUTATION_DETAIL : "computation trace"
+TAX_YEAR ||--o{ TPS_DEDUCTION : "monthly TPS"
+TAX_YEAR ||--o{ WEALTH_ASSET : "wealth snapshot"
 TAX_YEAR ||--o{ TAX_REBATE_PLAN : "rebate planning"
-TAX_REBATE_PLAN ||--o{ TAX_REBATE_CONTRIBUTION : contains
-TAX_REBATE_CONTRIBUTION }o--o| ACCOUNT : "DPS leg"
-TAX_REBATE_CONTRIBUTION }o--o| SAVINGS_CERTIFICATE : "Sanchayapatra leg"
-ACCOUNT ||--o{ STATEMENT : "monthly statement"
-CARD ||--o{ STATEMENT : "credit card statement"
-STATEMENT ||--o{ STATEMENT_LINE : contains
-STATEMENT_LINE ||--o| TRANSACTION : "reconciles"
+TAX_YEAR ||--o{ TAX_REBATE_CONTRIBUTION : "per-instrument per-FY"
+TAX_YEAR ||--o{ REBATE_CLAWBACK_EVENT : "cross-year clawback"
+
+TAX_REBATE_PLAN ||--o{ TAX_REBATE_CONTRIBUTION : groups
+
+WEALTH_CATEGORY ||--o{ WEALTH_ASSET : categorizes
+
+TAX_RATE_SET ||--o{ TAX_SPENDING_HEAD : "NBR heads for this FY"
+TAX_RATE_SET ||--o{ CATEGORY : "system-seeded categories for this FY"
 TAX_RATE_SET ||--o{ TAX_SLAB : defines
 TAX_RATE_SET ||--o{ TAX_FREE_THRESHOLD : defines
 TAX_RATE_SET ||--o{ SALARY_EXEMPTION_RULE : defines
 TAX_RATE_SET ||--o{ REBATE_RULE : defines
 TAX_RATE_SET ||--o{ ELIGIBLE_INVESTMENT : lists
+TAX_RATE_SET ||--o{ SURCHARGE_RULE : defines
 TAX_RATE_SET ||--o{ MINIMUM_TAX_RULE : defines
 TAX_RATE_SET ||--o{ FILING_TIMELINE_RULE : defines
 
-%% Attachment.owner_type/owner_id is a polymorphic pointer (Account, Investment, Lent,
-%% Transaction, or Savings Certificate). SQLite/Drift can't enforce that as a real FK,
-%% so the five ATTACHMENT relationships above are conceptual, not literal foreign keys.
+STATEMENT ||--o{ STATEMENT_LINE : contains
+STATEMENT_LINE ||--o| TRANSACTION : reconciles
+
+SMS_PARSING_RULE ||--o{ PARSED_SMS_LOG : matches
+PARSED_SMS_LOG ||--o| TRANSACTION : creates
+
+%% Polymorphic entities (app-layer FK, not DB enforced)
+%% NOMINEE }o--|| ACCOUNT : "owner_type=ACCOUNT"
+%% NOMINEE }o--|| SAVINGS_CERTIFICATE : "owner_type=SAVINGS_CERTIFICATE"
+%% ATTACHMENT }o--|| ACCOUNT : "owner_type=ACCOUNT"
+%% ATTACHMENT }o--|| INVESTMENT : "owner_type=INVESTMENT"
+%% ATTACHMENT }o--|| LENT : "owner_type=LENT"
+%% ATTACHMENT }o--|| TRANSACTION : "owner_type=TRANSACTION"
+%% ATTACHMENT }o--|| SAVINGS_CERTIFICATE : "owner_type=SAVINGS_CERTIFICATE"
 
 BANK {
+    int id PK
     string name
-    string institution_type "Bank, MFS, NBFI"
-    string swift_code
-    string logo
+    string institution_type "BANK, MFS, NBFI"
+    string swift_code "nullable"
+    string logo_url "nullable"
+    bool is_deleted
 }
 
 BRANCH {
+    int id PK
+    int bank FK
     string name
-    string bank FK
-    string routing
-    string address
-    string district
-    string contact_number
+    string routing_number "nullable"
+    string address "nullable"
+    string district "nullable"
+    string contact_number "nullable"
+    bool is_deleted
 }
 
 ACCOUNT {
+    int id PK
+    int bank FK
+    int branch FK "nullable"
     string identifier_name
-    string account_number
-    string bank FK
-    string branch FK
-    string type "Savings, Current, DPS, FDR, LOAN"
+    string account_number "encrypt at rest"
+    string type "SAVINGS, CURRENT, DPS, FDR, LOAN"
     string account_holder_name
-    string mobile_number
-    string email
-    string nominee
-    string currency
-    string status "Active, Closed, Matured, Defaulted"
+    string mobile_number "nullable"
+    string email "nullable"
+    string currency "BDT"
+    int current_balance "see notes"
+    int overdraft_limit "CURRENT only, nullable"
+    string status "ACTIVE, CLOSED, MATURED, DEFAULTED"
     date opening_date
-    int balance "Savings, Current and LOAN"
-    int overdraft_limit "Current only"
-    date start_date "FDR and DPS"
-    date maturity_date "FDR and DPS"
-    int tenure_months "FDR and DPS"
-    float interest_rate "FDR and DPS"
-    float govt_vat_on_interest "FDR and DPS"
-    int total_interest "FDR and DPS"
-    int net_interest "FDR and DPS"
-    int total_amount_on_maturity "FDR and DPS"
-    boolean auto_renewal "FDR and DPS"
+    bool is_deleted
+}
+
+ACCOUNT_TERM_DETAIL {
+    int account_id PK FK
+    date start_date
+    date maturity_date
+    int tenure_months
+    float interest_rate
+    float vat_rate
+    int gross_interest "computed"
+    int vat_amount "computed"
+    int net_interest "computed"
+    int maturity_amount "computed"
+    bool auto_renewal
     int principal_amount "FDR only"
-    int installment_amount "DPS and LOAN"
-    date installment_date "DPS and LOAN"
-    int total_principal_on_maturity "DPS only"
-    string loan_type "Personal, Auto, Home, Credit Card EMI, Informal, Other"
-    date disbursed_date "LOAN only"
-    date loan_end_date "LOAN only"
-    int loan_principal_amount "LOAN only"
-    float loan_interest_rate "LOAN only"
-    int processing_fee "LOAN only"
-    int duration_months "LOAN only"
-    int total_emi_payable "LOAN only"
-    int total_paid "LOAN only"
-    string repayment_status "Ongoing, Repaid, Defaulted"
+    int installment_amount "DPS only"
+    int installment_date "DPS only, 1-31"
+    int total_principal_on_maturity "DPS, computed"
+    bool is_tax_rebate_eligible "DPS, def false"
+}
+
+LOAN_DETAIL {
+    int account_id PK FK
+    string loan_type "PERSONAL, AUTO, HOME, CREDIT_CARD_EMI, INFORMAL, OTHER"
+    date disbursed_date
+    date start_date
+    date end_date
+    int principal_amount
+    float interest_rate "nullable"
+    int processing_fee "nullable"
+    int emi_amount
+    int installment_date
+    int duration_months
+    int total_emi_payable "computed"
+    int total_paid "computed from transactions"
+    string repayment_status "ONGOING, REPAID, DEFAULTED"
+    bool is_interest_tax_deductible "def false"
+    int tax_deductible_interest_this_year "nullable"
+}
+
+EMI_AMORTIZATION_SCHEDULE {
+    int id PK
+    int loan_detail FK
+    int installment_number
+    date due_date
+    int emi_amount
+    int interest_component "computed"
+    int principal_component "computed"
+    int outstanding_balance
+    bool is_paid
+    date paid_date "nullable"
+    int transaction FK "nullable"
+}
+
+NOMINEE {
+    int id PK
+    string owner_type "ACCOUNT, SAVINGS_CERTIFICATE"
+    int owner_id "app-layer FK"
+    string name
+    string relationship
+    float percentage_share
+    string contact_number "nullable"
+    date date_of_birth "nullable"
+    string guardian_name "for minors, nullable"
+    bool is_deleted
 }
 
 CARD {
-    string identifier_name
-    string account FK "0..1, debit only"
-    string type "Debit, Credit"
-    string network "VISA, MASTER CARD, AMEX, TAKAPAY, DINERS CLUB"
-    string card_number
+    int id PK
+    int account FK "nullable"
+    string type "DEBIT, CREDIT"
+    string network "VISA, MASTERCARD, AMEX, TAKAPAY, DINERS_CLUB"
+    string card_number_masked "last 4"
+    string card_number_encrypted "nullable"
     string card_holder_name
     string expire_month
     string expire_year
     int balance
-    int credit_limit "Credit only"
-    int billing_cycle_day "Credit only"
-    date payment_due_date "Credit only"
-    int minimum_due "Credit only"
-    int annual_fee "Credit only"
-    string status "Active, Blocked, Expired, Cancelled"
+    int credit_limit "CREDIT, nullable"
+    int billing_cycle_day "CREDIT, nullable"
+    date payment_due_date "CREDIT, nullable"
+    int minimum_due "CREDIT, nullable"
+    int annual_fee "nullable"
+    string status "ACTIVE, BLOCKED, EXPIRED, CANCELLED"
+    bool is_deleted
 }
 
 TRANSACTION {
-    string account FK
-    string card FK "optional"
-    string category FK
-    string type "Debit, Credit"
-    int amount
+    int id PK
+    int account FK
+    int card FK "nullable"
+    int category FK "nullable"
+    string type "DEBIT, CREDIT"
+    int amount "always positive"
     string currency
-    int balance_after
+    int balance_after "nullable"
     datetime transaction_date
-    date value_date
+    date value_date "nullable"
     string description
-    string counterparty_name
-    string counterparty_account
-    string method "Cash, NPSB, BEFTN, RTGS, EFTN, Mobile Banking, Card, Internal Transfer, Cheque, Standing Instruction, Other"
-    string reference_number
-    string status "Pending, Completed, Failed, Reversed"
-    string source "Manual, SMS Parsed, Statement Import, API"
-    string linked_transfer FK "self, paired leg"
-    string statement_line FK "optional"
-    datetime reconciled_at "optional"
-    string recurring_template FK "optional"
-    string attachment FK "optional"
-    string notes
+    string counterparty_name "nullable"
+    string counterparty_account "nullable"
+    string method "CASH, NPSB, BEFTN, RTGS, EFTN, MOBILE_BANKING, CARD, INTERNAL_TRANSFER, CHEQUE, STANDING_INSTRUCTION, OTHER"
+    string reference_number "nullable"
+    string status "PENDING, COMPLETED, FAILED, REVERSED"
+    string source "MANUAL, SMS_PARSED, STATEMENT_IMPORT, API"
+    int raw_sms FK "nullable"
+    int statement_line FK "nullable"
+    datetime reconciled_at "nullable"
+    int linked_transfer FK "self, nullable"
+    int recurring_template FK "nullable"
+    int attachment FK "nullable"
+    string notes "nullable"
+    bool is_deleted
 }
 
 TAX_SPENDING_HEAD {
+    int id PK
+    int rate_set FK
+    string code "Sch-1, IT-10BB:2, Section 44"
     string name "NBR head name"
-    string code "section/schedule reference"
-    string head_type "Income, Allowance, Exemption, Rebate Eligible, Deduction"
-    string description
-    boolean is_system
+    string head_type "INCOME, DEDUCTION, REBATE_ELIGIBLE, ALLOWANCE, EXEMPTION"
+    string description "nullable"
+    bool is_deleted
 }
 
 CATEGORY {
+    int id PK
+    int rate_set FK "nullable, user-created"
+    int parent_category FK "nullable"
     string name
-    string parent_category FK "optional"
-    string tax_head FK "optional, NBR head"
-    string type "Income, Expense, Transfer, Investment, Loan, Loan Repayment"
-    string icon
-    string color
-    boolean is_system
+    int tax_head FK "nullable"
+    string type "INCOME, EXPENSE, TRANSFER, INVESTMENT, LOAN, LOAN_REPAYMENT"
+    string icon "nullable"
+    string color "nullable"
+    bool is_system
+    bool is_deleted
 }
 
 TAG {
+    int id PK
     string name
     string color
+    bool is_deleted
+}
+
+TRANSACTION_TAG {
+    int transaction FK
+    int tag FK
 }
 
 SAVINGS_CERTIFICATE {
-    string id
+    int id PK
+    int bank FK
     string certificate_number
-    string bank FK
+    string category_code "5Y_BSP, 3Y_BSP, FAMILY_SAVINGS, PENSIONER, MONTHLY_PROFIT, OTHER"
     string name
-    string type
     string holder_name
-    int balance "face value"
+    string joint_holder_name "nullable"
+    string joint_holder_relation "nullable"
+    string holder_gender "nullable"
+    date date_of_birth "nullable"
+    string bank_account_for_profit "nullable"
+    int face_value
     date issue_date
     date schedule_maturity_date
-    int tenure_months
-    float interest_rate
-    float govt_vat_on_interest
-    int expected_maturity_amount
-    date encashment_date
-    boolean tax_rebate_eligible
-    string status "Active, Encashed, Matured"
+    int tenure_months "nullable"
+    float interest_rate "nullable"
+    float vat_rate "nullable"
+    int expected_maturity_amount "computed"
+    string profit_payment_frequency "MONTHLY, QUARTERLY, HALF_YEARLY, ANNUALLY, AT_MATURITY"
+    date encashment_date "nullable"
+    bool is_tax_rebate_eligible "def true"
+    string status "ACTIVE, ENCASHED, MATURED"
+    bool is_deleted
 }
 
 INVESTMENT {
-    datetime creation_date
-    datetime updation_date
-    date investment_date
-    string funding_account FK
+    int id PK
+    int investment_company FK
+    int funding_account FK "nullable"
+    datetime investment_datetime
     string method
-    string order_reference
-    string invested_company FK
+    string order_reference "nullable"
     int principal_amount
-    date expected_return_date
-    date actual_return_date
-    int return_amount
-    int profit
-    string status "Active, Matured, Defaulted"
+    date expected_return_date "nullable"
+    date actual_return_date "nullable"
+    int return_amount "nullable"
+    int profit "computed, nullable"
+    string status "ACTIVE, MATURED, DEFAULTED"
+    bool is_deleted
 }
 
 INVESTMENT_COMPANY {
+    int id PK
     string name
-    string address
-    string contact_info
-    string website
+    string address "nullable"
+    string contact_info "nullable"
+    string website "nullable"
+    bool is_deleted
 }
 
 LENT {
-    string direction "Lent Out, Borrowed"
+    int id PK
+    string direction "LENT_OUT, BORROWED"
     string counterparty_name
-    string account FK
+    int account FK
     string method
     int amount
     date lent_date
-    date expected_return_date
-    date actual_return_date
-    string status "Outstanding, Partially Returned, Returned, Written Off"
-    string proof_reference
-    string notes
+    date expected_return_date "nullable"
+    date actual_return_date "nullable"
+    string status "OUTSTANDING, PARTIALLY_RETURNED, RETURNED, WRITTEN_OFF"
+    string proof_reference "nullable"
+    string notes "nullable"
+    bool is_deleted
 }
 
 RECURRING_TRANSACTION_TEMPLATE {
-    string account FK
-    string category FK
+    int id PK
+    int account FK
+    int category FK "nullable"
     int amount
-    string type "Debit, Credit"
-    string frequency "Weekly, Monthly, Quarterly, Yearly"
+    string type "DEBIT, CREDIT"
+    string frequency "WEEKLY, MONTHLY, QUARTERLY, YEARLY"
     int day_of_period
     string description
     date next_due_date
-    date end_date
-    boolean auto_create
-    boolean active
+    date end_date "nullable"
+    bool auto_create
+    bool is_active
+    bool is_deleted
 }
 
 SMS_PARSING_RULE {
-    string bank FK
+    int id PK
+    int bank FK
     string sender_id_pattern
     string regex_pattern
-    string field_mapping
-    string account_type "optional"
-    string sample_sms
-    boolean active
+    string field_mapping "JSON"
+    string account_type "nullable"
+    string sample_sms "nullable"
+    bool is_active
+    bool is_deleted
 }
 
 PARSED_SMS_LOG {
+    int id PK
     string raw_sms_text
     string sender
     datetime received_at
-    string matched_rule FK
-    string parse_status "Parsed, Unparsed, Failed, Ignored"
-    string created_transaction FK "optional"
-    string notes
+    int matched_rule FK "nullable"
+    string parse_status "PARSED, UNPARSED, FAILED, IGNORED"
+    int created_transaction FK "nullable"
+    string notes "nullable"
+    bool is_deleted
 }
 
 ATTACHMENT {
-    string owner_type "Account, Investment, Lent, Transaction, Savings Certificate"
-    string owner_id
+    int id PK
+    string owner_type "ACCOUNT, INVESTMENT, LOAN, LENT, TRANSACTION, SAVINGS_CERTIFICATE"
+    int owner_id "app-layer FK"
     string name
     string file_path
     string mime_type "pdf, png, jpg, jpeg"
     datetime uploaded_at
-}
-
-TAX_PROFILE {
-    string employment_type "Private Job, Govt Job, Business, Freelancer, Other"
-    string tin_number
-    string tax_circle
-    string tax_zone
-    string employer_name
-    string employer_address
-    string employer_tin
-}
-
-TAX_YEAR {
-    string financial_year "e.g. 2025-2026"
-    string tax_profile FK
-    int gross_salary_income
-    int interest_income "from DPS, FDR, SavingsCert"
-    int other_income
-    int total_taxable_income "computed"
-    int exempted_income "computed"
-    int vat_on_interest "computed"
-    int tax_paid_by_employer "TPS"
-    int advance_tax_paid
-    int tax_before_rebate "computed from active TaxSlabs"
-    int total_rebate_claimed "from TaxRebatePlan"
-    int max_possible_rebate "computed per RebateRule"
-    int investment_required_for_max_rebate "computed"
-    int net_tax_payable "computed"
-    string status "Draft, Computed, Filed"
-    string notes
-}
-
-TAX_REBATE_PLAN {
-    string tax_year FK
-    string financial_year "e.g. 2025-2026"
-    int max_eligible_amount "govt ceiling"
-    int target_investment "user plan"
-    string notes
-    boolean is_active
-}
-
-TAX_REBATE_CONTRIBUTION {
-    string plan FK
-    string dps_account FK "optional, DPS only"
-    string savings_certificate FK "optional"
-    int monthly_installment "for DPS"
-    date start_date
-    date end_date
-    int total_investment "computed"
-    string notes
+    bool is_deleted
 }
 
 STATEMENT {
-    string account FK "optional"
-    string card FK "optional"
+    int id PK
+    int account FK "nullable"
+    int card FK "nullable"
     int month "1-12"
     int year
     string file_path
@@ -328,89 +389,247 @@ STATEMENT {
     int file_size "bytes"
     string file_hash "SHA-256"
     datetime uploaded_at
-    string status "Uploaded, Parsing, Parsed, Reconciling, Reconciled, Has Issues"
-    string notes
+    string status "UPLOADED, PARSING, PARSED, RECONCILING, RECONCILED, HAS_ISSUES"
+    string notes "nullable"
+    bool is_deleted
 }
 
 STATEMENT_LINE {
-    string statement FK
+    int id PK
+    int statement FK
     int line_number
     date transaction_date
-    date value_date "optional"
+    date value_date "nullable"
     string description
     int amount
-    int balance_after "optional"
-    string counterparty_name "optional"
-    string reference_number "optional"
-    string match_status "Unmatched, Matched, New Transaction, Suspicious"
-    string transaction FK "optional"
-    float confidence "optional, 0.0-1.0"
-    datetime matched_at "optional"
-    string matched_by "Auto, Manual"
-    string superseded_by FK "optional, self"
+    int balance_after "nullable"
+    string counterparty_name "nullable"
+    string reference_number "nullable"
+    string match_status "UNMATCHED, MATCHED, NEW_TRANSACTION, SUSPICIOUS"
+    int transaction FK "nullable"
+    float confidence "0.0-1.0, nullable"
+    datetime matched_at "nullable"
+    string matched_by "AUTO, MANUAL"
+    int superseded_by FK "self, nullable"
+    bool is_deleted
+}
+
+TAX_PROFILE {
+    int id PK
+    string employment_type "PRIVATE_JOB, GOVT_JOB, BUSINESS, FREELANCER, OTHER"
+    string tin_number "nullable"
+    string tax_circle "nullable"
+    string tax_zone "nullable"
+    string employer_name "nullable"
+    string employer_address "nullable"
+    string employer_tin "nullable"
+    string contact_number "nullable"
+    string email "nullable"
+    string taxpayer_category "GENERAL, WOMAN, SENIOR_CITIZEN, THIRD_GENDER_DISABLED, FREEDOM_FIGHTER, PARENT_OF_DISABLED"
+    bool is_deleted
+}
+
+TAX_YEAR_INCOME_SOURCE {
+    int id PK
+    int tax_year FK
+    int tax_head FK
+    string schedule_code "Sch-1 through Sch-5, FINANCIAL_ASSETS, OTHER_SOURCES, FIRM_AOP, MINOR_SPOUSE, FOREIGN"
+    int gross_amount
+    int exempted_amount
+    int reduced_rate_amount
+    int minimum_tax_amount
+    int final_tax_amount
+    int taxable_amount "computed"
+    int tax_computed "computed"
+}
+
+TAX_YEAR {
+    int id PK
+    string financial_year "2026-2027"
+    int tax_profile FK
+    string status "DRAFT, COMPUTED, FILED"
+    string notes "nullable"
+    int total_gross_income "computed"
+    int total_exempted_income "computed"
+    int standard_deduction_applied "computed"
+    int total_taxable_income_A "computed"
+    int tax_before_rebate "computed"
+    int minimum_tax_applied "nullable"
+    int vat_on_interest "computed"
+    int advance_tax_paid "computed"
+    int total_rebate_claimed "computed"
+    int max_possible_rebate "computed"
+    int investment_required_for_max_rebate "computed"
+    int rebate_clawback_amount "computed"
+    int surcharge_amount "computed"
+    int filing_incentive_amount "computed"
+    int filing_penalty_amount "computed"
+    int net_tax_payable "computed"
+    bool is_deleted
+}
+
+TAX_YEAR_COMPUTATION_DETAIL {
+    int tax_year PK FK
+    int section_78_A
+    int section_78_B
+    string rebate_computation "JSON"
+    string slab_breakdown "JSON"
+    int minimum_tax_checked
+    bool surcharge_wealth_threshold_crossed
+    int filing_quarter
+    string income_schedule_summary "JSON"
+}
+
+TPS_DEDUCTION {
+    int id PK
+    int tax_year FK
+    int month "1-12, Jul=1"
+    int amount
+    string employer_name "nullable"
+    string notes "nullable"
+    bool is_deleted
+}
+
+REBATE_CLAWBACK_EVENT {
+    int id PK
+    int source_tax_year FK
+    string investment_type "DPS, SAVINGS_CERTIFICATE"
+    int investment_id
+    string original_financial_years "JSON array"
+    string original_rebate_claimed_per_fy "JSON object"
+    int total_rebate_clawed_back
+    string reason
+    datetime created_at
+}
+
+TAX_REBATE_PLAN {
+    int id PK
+    int tax_year FK
+    string financial_year
+    int max_eligible_amount
+    int target_investment
+    string notes "nullable"
+    bool is_active
+}
+
+TAX_REBATE_CONTRIBUTION {
+    int id PK
+    int tax_year FK
+    int plan FK "nullable"
+    int dps_account FK "nullable"
+    int savings_certificate FK "nullable"
+    int monthly_installment "nullable"
+    date start_date
+    date end_date
+    int total_investment "computed"
+    int rebate_claimed "computed"
+    string notes "nullable"
+}
+
+WEALTH_CATEGORY {
+    int id PK
+    string name
+    bool is_liability
+    bool is_system
+    int sort_order
+    bool is_deleted
+}
+
+WEALTH_ASSET {
+    int id PK
+    int tax_year FK
+    int wealth_category FK
+    string description "nullable"
+    int amount
+    string source "COMPUTED, MANUAL"
+    string notes "nullable"
+    bool is_deleted
 }
 
 TAX_RATE_SET {
-    string financial_year "e.g. 2026-2027"
-    string label "e.g. Finance Act 2026"
-    boolean is_active "only one at a time"
-    string notes
+    int id PK
+    string financial_year
+    string label
+    bool is_active "only one"
+    string notes "nullable"
+    bool is_deleted
 }
 
 TAX_SLAB {
-    string rate_set FK
+    int id PK
+    int rate_set FK
     int slab_order
     int min_income
-    int max_income "nullable, null = rest"
+    int max_income "nullable, rest"
     float rate_percent "e.g. 10.0"
 }
 
 TAX_FREE_THRESHOLD {
-    string rate_set FK
-    string category_code "General, Woman Senior, Third Gender Disabled, Freedom Fighter Juli, Parent of Disabled"
+    int id PK
+    int rate_set FK
+    string category_code "GENERAL, WOMAN, SENIOR_CITIZEN, THIRD_GENDER_DISABLED, FREEDOM_FIGHTER, PARENT_OF_DISABLED"
     string category_label
     int exempt_amount
 }
 
 SALARY_EXEMPTION_RULE {
-    string rate_set FK
+    int id PK
+    int rate_set FK
     int max_exempt_amount "e.g. 500000"
     float percent_of_salary "e.g. 33.33"
-    string description
+    string description "nullable"
 }
 
 REBATE_RULE {
-    string rate_set FK
-    string label "e.g. Section 78"
+    int id PK
+    int rate_set FK
+    string label
     float rate_percent_of_A "e.g. 3.0"
     float rate_percent_of_B "e.g. 10.0"
     int max_rebate_amount "e.g. 750000"
 }
 
 ELIGIBLE_INVESTMENT {
-    string rate_set FK
-    string instrument_code "DPS, Sanchayapatra, Life Insurance, PF, GPS, Pension, Govt Securities, Mutual Fund, Listed Shares, ICB Unit, Charitable Donation"
+    int id PK
+    int rate_set FK
+    string instrument_code "DPS, 5Y_BSP, 3Y_BSP, FAMILY_SAVINGS, PENSIONER, MONTHLY_PROFIT, LIFE_INSURANCE, PF, GPS, PENSION, GOVT_SECURITIES, MUTUAL_FUND, LISTED_SHARES, ICB_UNIT, CHARITABLE_DONATION, UNIVERSAL_PENSION"
     string instrument_name
-    int max_annual_limit "nullable, per-instrument cap"
-    boolean is_active
-    string description "optional"
+    string filer_category "FIRST_TIME, REPEAT, ALL"
+    int max_annual_limit "nullable"
+    int min_purchase_amount "nullable"
+    bool is_joint_allowed
+    int joint_max_annual_limit "nullable"
+    string eligibility_rules "JSON, nullable"
+    bool is_active
+    string description "nullable"
+}
+
+SURCHARGE_RULE {
+    int id PK
+    int rate_set FK
+    int threshold_low
+    int threshold_high "nullable"
+    float surcharge_rate "e.g. 10.0"
+    string description "nullable"
 }
 
 MINIMUM_TAX_RULE {
-    string rate_set FK
-    string location_code "Major City, Other City, Other Area, New Taxpayer"
+    int id PK
+    int rate_set FK
+    string location_code "MAJOR_CITY, OTHER_CITY, OTHER_AREA, NEW_TAXPAYER"
     string location_label
     int min_tax_amount "e.g. 5000"
 }
 
 FILING_TIMELINE_RULE {
-    string rate_set FK
+    int id PK
+    int rate_set FK
     int quarter_number "1-4"
-    string quarter_label "e.g. Jul-Sep (Q1)"
+    string quarter_label "Jul-Sep"
     int start_month
     int end_month
-    float rebate_percent "nullable, e.g. 5.0"
-    int rebate_max_amount "nullable, e.g. 25000"
-    float penalty_percent "nullable, e.g. 2.0"
-    int penalty_max_amount "nullable, e.g. 3000"
+    float rebate_percent "nullable"
+    int rebate_max_amount "nullable"
+    float penalty_percent "nullable"
+    int penalty_max_amount "nullable"
 }
