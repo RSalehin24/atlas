@@ -8,8 +8,11 @@ Build a personal finance and tax preparation application with **full functionali
 
 See [FINANCIAL_USER_JOURNEYS.md](FINANCIAL_USER_JOURNEYS.md) for the detailed onboarding, input forms, financial user stories, and acceptance criteria.
 
-The application should answer four questions:
+The first question is **“What is my current financial status?”** Home must answer it using accessible balances, assets, debts, paid/unpaid/overdue commitments, pending activity, current-period spending, and clearly stated data coverage. Transaction history explains that position; forecasts explain what may happen next. Neither replaces the current snapshot.
 
+The application should answer these questions:
+
+- Where do I stand financially right now, and how current and complete is that picture?
 - Where did my money come from, and where did it go?
 - What do I own, owe, expect to receive, and need to pay?
 - Which fees, waivers, cashback, and rewards apply to my financial products?
@@ -160,7 +163,7 @@ Persist money as integer minor units. Use exact integer arithmetic, explicit rou
 
 ### B. NBR expenditure categories and financial treatment
 
-Keep three concepts separate:
+Keep four concepts separate:
 
 - **Financial action:** expense, income, transfer, debt movement, investment, or asset acquisition.
 - **NBR expenditure/asset treatment:** the official report head and applicable form/period version, or an explicit unresolved treatment.
@@ -289,6 +292,7 @@ A partial parse must never mark an account reconciled.
 
 **Planning**
 
+- Present current financial status before forecasts: actual balances and positions, paid/part-paid/unpaid/overdue obligations, pending events, current-period activity, and source freshness. Recompute after relevant records change; a sync timestamp alone is not evidence of current bank coverage.
 - Separate actual, scheduled, and hypothetical amounts.
 - Forecast cash after bills, EMIs, savings commitments, and planned purchases.
 - Provide purchase scenarios without posting hypothetical transactions.

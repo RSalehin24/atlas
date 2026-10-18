@@ -8,9 +8,28 @@ Reading order: [experience](#1-the-experience-we-are-building) → [screens](#2-
 
 ## 1. The experience we are building
 
-The user should be able to say: **“My financial activity comes into one place. I correct what needs attention, see what I have and owe, and know what is coming next.”**
+The user should be able to say: **“I know my current financial status: how much money I have available, what I own and owe, what is paid or overdue, and what needs my attention. I can see how I reached this position, how current the information is, and what is coming next.”**
 
 The application combines transactions, supporting evidence, financial products, and future commitments. Users work with familiar actions such as buying something, transferring money, paying a bill, receiving salary, lending money, or recording an investment. Bookkeeping entries and synchronization machinery stay behind those actions.
+
+### Current financial status is the first answer
+
+The primary experience is a current financial snapshot, supported by transaction history and followed by future planning. Collecting activity is how the app establishes that position; a transaction feed alone is not the product's main answer.
+
+| Question the user needs answered now | What the application shows |
+|---|---|
+| How much money do I have access to? | Current tracked cash, bank, MFS, and prepaid balances, separated by account; restricted/locked funds and unconfirmed balances are identified |
+| What is my current debt? | Card debt, loan principal, and informal borrowing, with billed amounts and remaining principal distinguished and counted once |
+| Where do my assets and money stand? | Investments, deposits, retained assets, and money lent, showing cost/outstanding amounts and dated valuations separately |
+| What is paid, part-paid, unpaid, or overdue? | Status and remaining amount for bills, EMIs, card statements, lending repayments, and investment receipts where due dates exist |
+| What activity is still pending? | Pending authorizations, transfers awaiting a counterpart, unconfirmed receipts, and unmatched charges; these do not masquerade as settled transactions |
+| Where am I this month? | Actual income received, spending by NBR head, principal repaid, asset additions, and remaining category budgets for the current reporting period |
+| What needs action now? | Overdue obligations, negative tracked balances, unresolved monetary differences, failed source checks, and unclaimed benefits whose deadlines are due |
+| Can I trust these figures as current? | Included accounts, unknown positions, latest captured activity, source coverage, last reconciliation, and unresolved differences |
+
+Current cash, total assets, total liabilities, and net position are separate views. Net position is assets minus liabilities on a stated and consistent valuation basis; incomplete assets/debts or mixed/stale valuations make it a partial estimate. Future salary, expected investment profit, uncredited cashback, and unused card limits are not current money owned. "Available to spend after commitments" belongs to a separately labeled forecast with a horizon and assumptions, not the actual cash-balance total.
+
+The snapshot must say "Based on records through …" rather than imply a live bank connection. A recent synchronization time does not prove recent bank evidence. Each important total opens the accounts, records, and dates behind it. Unknown information is shown explicitly instead of replaced with zero or a misleading complete total.
 
 ### End-to-end journey
 
@@ -21,7 +40,7 @@ flowchart TD
     C --> D[Set a balance or mark it unknown]
     D --> E[Add transactions manually or connect input sources]
     E --> F[Review detected accounts and transaction exceptions]
-    F --> G[See the first financial overview]
+    F --> G[See current financial status and its data coverage]
     G --> H[Add cards, loans, investments and commitments as needed]
     H --> I[Daily capture and review]
     I --> J[Monthly statement reconciliation]
@@ -31,7 +50,7 @@ flowchart TD
 
 ### What counts as a successful first session
 
-The user has one account, an explicit balance status, at least one recorded or reviewed transaction, and an understandable overview. They do not have to enter all accounts, connect their inbox, upload years of history, or configure every financial product before using the app.
+The user has one account, an explicit balance status, at least one recorded or reviewed transaction, and a first current-status snapshot. They can tell what is known, what is missing, and which action will improve the picture. They do not have to enter all accounts, connect their inbox, upload years of history, or configure every financial product before using the app.
 
 The overview is useful with partial information but must clearly identify missing balances, incomplete history, and unresolved transactions.
 
@@ -56,7 +75,7 @@ The overview is useful with partial information but must clearly identify missin
 
 | Screen | What the user sees and does |
 |---|---|
-| Home | Cash and bank balances, card/loan debt, upcoming payments, review tasks, and recent activity |
+| Home | Current financial status first: accessible balances, assets/debts, paid/unpaid/overdue commitments, month-to-date position, pending activity, data coverage, and action items; history and forecasts are separate sections |
 | Activity | Searchable transactions; add, assign NBR expenditure heads, split, link, correct, or inspect evidence |
 | Accounts | Banks, MFS, cash, prepaid accounts, cards, balances, and statement history |
 | Commitments | Loans, EMIs, bills, subscriptions, borrowing, and their due dates |
@@ -460,15 +479,15 @@ Opening card debt, unpaid latest-statement amount, unbilled activity, and remain
 
 ## 9. Daily use, planning, and the monthly journey
 
-### US-27 — Start each day with a useful overview
+### US-27 — Understand my current financial status
 
-**Story:** As a user, I want to understand my financial position without opening every product.
+**Story:** As a user, I want to know where I stand financially right now, including the state of my money, assets, debts, payments, and unresolved items, without opening every product.
 
-**Experience:** Home shows liquid funds, card/loan balances, next payments, expected receipts, review counts, and recent activity. Expand totals to see included accounts and missing data. Tap a number to reach its underlying records. Display reminders privately by default; amounts on lock-screen notifications require opt-in.
+**Experience:** Home opens with "Your financial status" and its evidence coverage. Show accessible balances, current assets/debts and partial net position where appropriate, paid/part-paid/unpaid/overdue obligations, pending activity, and the month's actual position. Highlight actions needing attention. Place "How I got here" activity and "What comes next" forecasts below the current snapshot so actual and expected amounts remain distinguishable. Expand totals to see included accounts, dates, and missing data; tap an obligation to see its remaining balance and payment history. Display reminders privately by default; amounts on lock-screen notifications require opt-in.
 
-**Implementation:** Derive summaries from the ledger and dated product positions. Keep available credit, liquid cash, invested assets, receivables, and net wealth distinct. A product represented by both an account and a detail view contributes once. Unknown balances and stale valuations produce incomplete totals with explicit coverage.
+**Implementation:** Derive the snapshot from posted ledger movements, dated opening/product positions, repayment allocations, pending events, and source/reconciliation status. Recompute the affected view after a confirmed movement, payment allocation, correction, sync resolution, or source update. Calendar time changes overdue status without inventing a payment. Keep available credit, liquid cash, invested assets, receivables, and net position distinct; a product represented by both an account and a detail view contributes once. Unknown balances, incomplete debt, and stale valuations produce partial totals with explicit coverage. Current-period spending and source deductions remain compatible with NBR expenditure mappings.
 
-**Acceptance:** A positive credit limit is never counted as money owned. Forecast income is excluded from actual balances. A card installment plan appears in total debt once. Home never labels a partial overview "complete."
+**Acceptance:** A recorded repayment immediately reduces the remaining obligation and changes its paid/part-paid state without waiting for the next monthly report. An unpaid item becomes overdue only when its configured due date passes; an item without a due date stays "Due date unknown." A positive credit limit and forecast income are excluded from current assets. A card installment plan appears in total debt once. Offline Home identifies its last available records; a source reconnect does not imply missing activity was captured until catch-up completes. Home never labels a partial snapshot "complete" or a synchronized snapshot "live bank balance."
 
 ### US-28 — Set a budget and plan a purchase
 
@@ -613,6 +632,7 @@ Each story's acceptance criteria become deterministic domain tests, integration 
 | Fees and benefits | Policy change, refund, qualification, claim, posted waiver, and reward redemption do not overwrite history |
 | Forecast | Budget remainder, recurring bills, EMI commitments, card settlement, and purchase scenario are not counted twice |
 | Reconciliation | Missing fee and revised statement reopen/resolve the proper account period |
+| Current status | Actual payment updates account/debt/remaining-dues together; overdue state changes by due date; unknown balances, stale evidence, pending events, and forecast receipts remain distinguishable |
 | Synchronization | Two offline edits conflict visibly; replay/retry creates one financial movement |
 | Security | Unauthorized access fails; private contents are encrypted at rest in app-managed storage and before upload; no financial logs |
 | Recovery | Full backup restores accounts, movements, product links, and attachment contents into a clean installation |
