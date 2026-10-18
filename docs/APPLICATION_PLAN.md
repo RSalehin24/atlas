@@ -101,11 +101,11 @@ Changing a passphrase rewraps the vault key. Suspected key compromise requires g
 Use Drift/SQLite for persistent encrypted record envelopes and the offline outbox. Build decrypted reporting views in memory while unlocked. Drift supports web storage through browser-compatible SQLite infrastructure. [Drift web documentation](https://drift.simonbinder.eu/platforms/web/)
 
 - Android and trusted browsers can retain encrypted records for offline use.
-- An untrusted-browser mode keeps records only for the current session.
-- Offline edits save locally and show their synchronization status.
+- A temporary/untrusted-browser mode keeps records only for the current session and confirms writes only after server acknowledgment; offline/in-flight drafts are explicitly not durable.
+- Trusted-device offline edits save in encrypted persistent storage before reporting Saved on this device; storage failures cannot claim durability.
 - Locked devices may synchronize already encrypted changes.
 - SMS parsing and financial calculations wait until the vault is unlocked.
-- Logout clears decrypted state and offers removal of the local encrypted cache.
+- Logout clears decrypted state but preserves trusted-device encrypted pending work. Cache removal must offer sync, encrypted recovery archive, cancel, or separately confirmed local discard; temporary-session navigation warns about unsaved in-tab drafts.
 
 ### Synchronization and conflicts
 
@@ -123,6 +123,18 @@ Use this application-level protocol:
 Firestore transactions require connectivity; offline changes therefore remain in the local outbox until they can be checked. [Firestore transaction documentation](https://firebase.google.com/docs/firestore/manage-data/transactions)
 
 Use soft-delete tombstones so deleted records do not reappear from another device. Derived totals are recomputed locally rather than synchronized as competing balances.
+
+Concurrent imports also require stable vault-scoped opaque source claims, not just retry mutation IDs. On reconnect, reconcile claims and decrypted event candidates before committing; identical source events cannot create two shared postings. Different sources with ambiguous economic identity require review. Keep source-deduplication identity stable across encryption-key rotation.
+
+Serialize cross-source match decisions using a checked vault matching revision: match against a consistent decrypted revision, atomically check/advance that revision with the claims/operation, and refresh/rerun matching when stale. Match-relevant manual additions and edits advance it too, preventing SMS and email from racing against an empty shared baseline.
+
+For financial conflicts, the latest committed whole operation remains the reporting baseline; show the local alternative and its effect separately. Resolve by keeping committed values, proposing the complete local action, or entering a normal corrected action. Revalidate linked postings/allocations/dependencies atomically against current revisions. Deletion/edit conflicts never auto-resurrect; an explicit restoration is required. Block dependent local changes pending resolution and mark affected totals/reports provisional.
+
+Backup restore is staged and additive when a live vault exists: preserve live revisions and tombstones, restore selected genuinely missing dependency groups/attachments, and turn desired older values into reviewed corrections. Never destructively replace a live vault or restore old device/credential permissions. If live checks are unavailable, remain in local staging; if the original owner has no live vault, recover into a newly encrypted vault with newly tested credentials. A local recovery archive can preserve pending work but is labeled separately from a verified synchronized backup.
+
+All restored groups must respect live tracking boundaries and opening/current-position coverage. An absent transaction ID does not establish a missing financial effect. Older funding/activity already represented by an opening position is reference-only; activating it requires a reviewed reconstruction that atomically replaces the covered anchor, checks current totals, and reopens affected reconciliation/reporting.
+
+Credential lifecycle, lost-device authorization, resumable key-epoch rotation, old-backup compatibility, Google-account-unavailable recovery, and temporary-session safeguards follow the explicit US-30, US-31 and US-35 flows in the companion journey document. A recovery key unlocks financial data, not the Google account. Remote device removal cannot erase already copied keys or archives.
 
 ### Security boundaries
 
@@ -148,7 +160,9 @@ Examples:
 | Action | Financial effect |
 |---|---|
 | Transfer between your bank accounts | Move money between assets |
-| Credit-card purchase | Record spending and increase card liability |
+| Credit-card purchase | Record its expense/asset allocation and increase card liability; no immediate bank withdrawal |
+| Confirm an incurred unpaid household bill | Record expense and bill payable once, with no bank debit; include the payable in liabilities/net position |
+| Settle an incurred bill | Reduce its payable and bank/cash funds, or transfer it into card debt, without another expense |
 | Pay a credit-card bill | Reduce bank balance and card liability |
 | Receive a loan | Increase bank balance and loan liability |
 | Pay an EMI | Allocate principal, interest, and fees |
@@ -160,6 +174,14 @@ Examples:
 This prevents purchases and subsequent card repayments from becoming duplicate expenses.
 
 Persist money as integer minor units. Use exact integer arithmetic, explicit rounding rules, and decimal-string serialization where necessary for consistent Android/web results. Retain original currency, booked BDT equivalent, and conversion evidence for foreign transactions.
+
+Initial ledger positions are BDT-only. Foreign merchant amounts are source metadata; post the actual bank-booked BDT settlement and separately evidenced fees. Foreign authorizations without a BDT settlement remain pending. Full foreign-currency accounts, exchange feeds/revaluation and cross-currency transfers are outside this release. Refund the original booked cost for the identified returned component and post any difference from the actual BDT credit as an explicit realized settlement difference; retain verified or unresolved NBR treatment and never add included fees twice.
+
+A confirmed completed movement on an identified owned account updates booked funds even when its purpose/counterparty is unknown. Post its opposite side to explicit unresolved suspense, not an invented expense/receivable/transfer. Resolve purpose by reclassification without another cash movement; affected classification/net-position reports remain partial.
+
+Transfers/card settlements retain separately evidenced departure and arrival dates. Each observed leg is balanced and atomic using transit/clearing, rather than fabricating simultaneous endpoint movements. A bank debit reduces bank funds immediately; a confirmed card credit reduces total card debt even if its statement/minimum-due allocation is pending. Preserve partial/returned/arrival-first payments; allocating an existing credit must not reduce debt again. Home and reminders distinguish sent, credited and allocated states.
+
+Confirmed costs for goods/services already received follow US-23's incurred-bill flow: record the expense and unpaid payable once on the confirmed incurred date, independently of bank payment. Keep bill issue/service/due/settlement dates and NBR reporting-date rules separate. Estimates/future notices remain commitments; existing card/loan debt and previously recorded costs are matched before recognition. Payment-first imports reuse/reclassify the existing movement; confirmed card funding transfers the payable into card debt. Pre-boundary unpaid bills use opening positions, and corrections/waivers adjust the linked ledger treatment with overpayment review where needed. Unknown recognition/settlement coverage makes current liabilities/net position partial.
 
 ### B. NBR expenditure categories and financial treatment
 
@@ -178,9 +200,13 @@ Model an official head catalog, period-aware mappings, expenditure allocations, 
 
 Electronics and furniture acquisitions need linked asset cost/date/evidence and the relevant asset-report treatment, as the form separately includes furniture and electronic assets. Distinguish acquisitions, repairs/services, and mixed purchases. Report cash outflow, asset additions, and lifestyle consumption as separate views of the same record without counting the acquisition twice. Transfers, principal repayments, refundable deposits, and investments require their own financial treatment.
 
+Funding determines the movement: an asset paid from bank/cash reduces that account, while a financed acquisition increases the associated liability. Later installment conversion preserves the original asset/expense split and changes only debt scheduling. Repayment settles the liability without recording another acquisition or lifestyle expense.
+
 Provide a financial-release NBR expenditure summary with configurable income-period dates, official form order, allocated totals, comments, source traceability, asset additions, and unresolved items. Pin exports to catalog/mapping versions. A complete summary requires verified applicable mappings and adequate reviewed source coverage; it does not imply a complete tax return or a calculated tax liability.
 
 Capture source deductions through payslips, certificates, and reviewed manual components as well as transaction alerts. Reconcile gross income/profit, evidenced deductions, and a net bank receipt without adding another receipt or an invented bank debit. Store reporting-date rules for purchases, postings, deductions, and cross-period refunds. Expenditure readiness checks include cash/unconnected-source confirmation, source coverage, deduction evidence, and unresolved asset treatment; user completeness confirmations remain explicitly user-attested.
+
+Implement the expenditure mapping register and period-pack release gate from US-13 in the journey document. Each target period needs reviewed source references and representative-case verification; financial tagging or owner acknowledgment cannot turn a draft rule into verified legal treatment. Unsupported fees, subscriptions, gifts, repairs and other cases remain named, amount-bearing review items blocking complete summaries rather than an invented official Other head.
 
 Classification records must include the applied rule, rule version, explanation, confidence, and any user override.
 
@@ -292,11 +318,25 @@ A partial parse must never mark an account reconciled.
 
 **Planning**
 
-- Present current financial status before forecasts: actual balances and positions, paid/part-paid/unpaid/overdue obligations, pending events, current-period activity, and source freshness. Recompute after relevant records change; a sync timestamp alone is not evidence of current bank coverage.
+- Present current financial status before forecasts using the companion document's metric contract: booked balances, separately evidenced holds/availability, principal plus posted unpaid charges, consistent cost-basis assets/net position, obligations and source coverage. Recompute after relevant records change; a sync timestamp alone is not evidence of current bank coverage. Unknown holds/positions cannot produce a confirmed available amount.
 - Separate actual, scheduled, and hypothetical amounts.
 - Forecast cash after bills, EMIs, savings commitments, and planned purchases.
 - Provide purchase scenarios without posting hypothetical transactions.
 - Show available cash separately from total assets and unused credit.
+
+For each budget period/category, residual discretionary allowance is max(0, budget − actual category consumption − remaining scheduled category commitments). Include scheduled commitments plus the residual once, even when commitments exceed budget. Convert cash/card funding to dated settlement obligations without adding the same card/loan payment twice. Budget rollover is off by default; residual reserves remain undated period allowances. Unscheduled liabilities make the forecast incomplete.
+
+Variable bills follow US-23: retain Unpriced, Estimated or Billed amounts separately from payment status. Use only confirmed amounts or explicit, labeled user estimates in numeric forecast commitments; missing amounts never become zero or silently reuse the last bill. Unpriced commitments make affected cash/spendable projections incomplete, even with a category reserve. A confirmed bill replaces its estimate on the same occurrence and recalculates the budget without creating a bank movement or duplicate reservation.
+
+Recognizing an incurred bill moves its cost from scheduled consumption into actual consumption for the incurred-date budget period; its unpaid balance remains a separate cash-settlement requirement, included once by funding route and reduced by valid paid/sent coverage. A prior-period bill can require current cash without becoming current-period consumption. With Tk 10,000 bank and a Tk 3,200 incurred bill, show Tk 3,200 payable and Tk 6,800 net; paying Tk 1,000 leaves bank Tk 9,000/payable Tk 2,200/net Tk 6,800 and adds no expense. Within a Tk 5,000 budget, the Tk 1,800 residual reserve is separate from the remaining bill settlement.
+
+Skip because not due requires a reason and removes only a genuinely absent expectation. Invoiced, contractual or part-paid obligations remain outstanding until paid, evidenced waiver/cancellation or reviewed adjustment; reminder controls and future template changes cannot clear them. Contradictory later bill evidence reopens the same occurrence with audit history. Apply these rules to reminders as well as forecasts.
+
+Link already-debited payment funding to its intended obligation for cash forecasting only. Exclude that funded amount from another automatic future outflow while receipt/allocation is pending, without marking the due paid or assuming bank allocation. Recompute capped funding coverage after returns, partial credit or corrections; unlinked suspense does not cover a due. For example, sending Tk 3,000 from Tk 10,000 leaves Tk 7,000 booked/projected bank funds before receipt, not Tk 4,000; show the unpaid statement and uncertain settlement separately. Another payment requires an explicit plan or further evidenced obligation.
+
+Project from booked funds with active holds separately, then derive available funds per horizon. A linked held payment settles by reducing booked funds and consuming its hold together; its reservation cannot also be subtracted again as a pending payment or budget allowance. Unknown hold/commitment overlap requires review. Card holds affect available credit rather than owned bank funds.
+
+Product closure, account archiving, duplicate-account merging and card replacement follow US-33: preserve history and obligations, validate balances, and never create a second liability for a replacement instrument on the same account. Notifications follow US-34: shared in-app tasks, optional generic local alerts on one designated trusted Android device, explicit snoozes and refresh behavior, and no closed-web-tab delivery promise.
 
 ### G. Fees, waivers, and rewards
 
@@ -495,6 +535,11 @@ Approve the concrete dependency manifest before installing application dependenc
 - Google Password Manager and Apple Passwords save/retrieve as primary; canceled save, wrong manager-account selection, unsupported PRF, credential deletion, new-device unlock, and independent recovery.
 - Unauthorized Firebase reads/writes.
 - Concurrent edits, retries, interruptions, and offline tombstones.
+- Independent same-file/offline source imports, complete-operation conflict choices, delete/edit races, and dependent queued edits.
+- Trusted-device logout and cache removal with pending work, temporary-session save failures, storage eviction, and encrypted recovery archives.
+- Older-backup restoration against newer revisions/tombstones, unavailable live checks, and pending mutation reconciliation.
+- Restoring old funding onto later opening positions; unexplained confirmed debits; separately dated transfer/card legs and pending statement allocation; BDT-settled foreign purchases, fees and differing-rate refunds.
+- Lost-device revocation, interrupted key rotation, stale-epoch writes, new versus old archive credentials, and unavailable Google authorization.
 - Atomic transfer/repayment mutations.
 - No plaintext persistence, logs, or uploads.
 - Backup restored into a clean installation.
